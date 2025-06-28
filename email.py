@@ -1,18 +1,38 @@
 import os
 import random
 import time
-import json
+import re
 from datetime import datetime
 
-def clear_cache():
-    """Nettoyer le cache via Termux"""
-    os.system("termux-notification -t 'Nettoyage en cours'")
-    os.system("pm clear com.google.android.gms")
-    os.system("pm clear com.google.android.gsf")
-    time.sleep(2)
+# --- Couleurs terminal ---
+class Colors:
+    INFO = "\033[94m"
+    OK = "\033[92m"
+    WARN = "\033[93m"
+    ERR = "\033[91m"
+    RESET = "\033[0m"
 
+# --- Outils ---
+def run_cmd(command, delay=0.5):
+    os.system(command)
+    time.sleep(delay)
+
+def is_valid_email(email):
+    return re.match(r"[^@]+@[^@]+\.[^@]+", email)
+
+def is_strong_password(password):
+    return len(password) >= 6
+
+# --- Nettoyage ---
+def clear_cache():
+    print(f"{Colors.INFO}Nettoyage du cache...{Colors.RESET}")
+    run_cmd("termux-notification -t 'Nettoyage du cache en cours'")
+    run_cmd("pm clear com.google.android.gms")
+    run_cmd("pm clear com.google.android.gsf")
+    print(f"{Colors.OK}Cache nettoyé avec succès.{Colors.RESET}")
+
+# --- Données aléatoires ---
 def generate_random_details():
-    """Générer des données aléatoires"""
     first_names = ["Alex", "Jean", "Marie", "Thomas"]
     last_names = ["Dupont", "Martin", "Bernard", "Dubois"]
     return {
@@ -23,62 +43,64 @@ def generate_random_details():
         'year': random.randint(1980, 2000)
     }
 
-def simulate_swipe(duration=500):
-    """Simuler un swipe"""
-    os.system(f"termux-sensor -s accelerometer -d 100 -n 1")
-    time.sleep(duration/1000)
+# --- Simulation de swipe (pause) ---
+def simulate_pause(duration=500):
+    time.sleep(duration / 1000)
 
+# --- Création de compte ---
 def create_account(email, password):
     try:
         details = generate_random_details()
-        
-        # Ouvrir les paramètres
-        os.system("termux-toast 'Ouvrir les paramètres manuellement'")
-        input("Ouvrez manuellement Paramètres > Comptes > Ajouter un compte Google. Appuyez sur Entrée quand c'est fait...")
-        
-        # Remplir le formulaire
-        os.system(f"termux-dialog text -t 'Prénom' -i '{details['first_name']}'")
-        simulate_swipe()
-        
-        os.system(f"termux-dialog text -t 'Nom' -i '{details['last_name']}'")
-        simulate_swipe()
-        
-        # Date de naissance
-        os.system(f"termux-dialog text -t 'Jour' -i '{details['day']}'")
-        simulate_swipe()
-        os.system(f"termux-dialog text -t 'Mois' -i '{details['month']}'")
-        simulate_swipe()
-        os.system(f"termux-dialog text -t 'Année' -i '{details['year']}'")
-        simulate_swipe()
-        
-        # Email et mot de passe
-        os.system(f"termux-dialog text -t 'Email' -i '{email}'")
-        simulate_swipe()
-        os.system(f"termux-dialog text -t 'Mot de passe' -i '{password}'")
-        simulate_swipe()
-        os.system(f"termux-dialog text -t 'Confirmer mot de passe' -i '{password}'")
-        
-        # Fin du processus
-        os.system("termux-toast 'Completez manuellement les dernières étapes'")
-        print(f"Compte créé : {email}")
+
+        print(f"{Colors.INFO}Veuillez ouvrir les paramètres : Paramètres > Comptes > Ajouter un compte Google{Colors.RESET}")
+        input("Appuyez sur Entrée quand vous êtes prêt...")
+
+        champs = [
+            ("Prénom", details['first_name']),
+            ("Nom", details['last_name']),
+            ("Jour", str(details['day'])),
+            ("Mois", str(details['month'])),
+            ("Année", str(details['year'])),
+            ("Email", email),
+            ("Mot de passe", password),
+            ("Confirmer mot de passe", password)
+        ]
+
+        for titre, valeur in champs:
+            run_cmd(f"termux-dialog text -t '{titre}' -i '{valeur}'", delay=0.8)
+            simulate_pause()
+
+        run_cmd("termux-toast 'Complétez manuellement les dernières étapes'")
+        print(f"{Colors.OK}Compte préparé : {email}{Colors.RESET}")
         return True
-        
+
     except Exception as e:
-        print(f"Erreur : {str(e)}")
+        print(f"{Colors.ERR}Erreur : {str(e)}{Colors.RESET}")
         return False
 
+# --- Programme principal ---
 if __name__ == "__main__":
-    # Installer les dépendances Termux-API si nécessaire
     if not os.path.exists("/data/data/com.termux/files/usr/bin/termux-api"):
-        print("Veuillez installer Termux-API depuis le Play Store")
-        print("Puis exécutez: pkg install termux-api")
+        print(f"{Colors.ERR}❌ Termux-API non installé.{Colors.RESET}")
+        print("Veuillez exécuter : pkg install termux-api")
         exit()
 
-    email = input("Entrez l'email : ")
-    password = input("Entrez le mot de passe : ")
-    
+    email = input("Entrez l'adresse email : ").strip()
+    password = input("Entrez le mot de passe (min. 6 caractères) : ").strip()
+
+    if not is_valid_email(email):
+        print(f"{Colors.ERR}Email invalide.{Colors.RESET}")
+        exit()
+
+    if not is_strong_password(password):
+        print(f"{Colors.ERR}Mot de passe trop court.{Colors.RESET}")
+        exit()
+
     clear_cache()
+
     if create_account(email, password):
         with open("accounts.txt", "a") as f:
-            f.write(f"{email}:{password}\n")
-        print("Compte enregistré dans accounts.txt")
+            f.write(f"{datetime.now()} - {email}:{password}\n")
+        print(f"{Colors.OK}✅ Compte enregistré dans accounts.txt{Colors.RESET}")
+    else:
+        print(f"{Colors.ERR}❌ La création a échoué.{Colors.RESET}")
