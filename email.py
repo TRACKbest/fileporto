@@ -1,117 +1,117 @@
 import os
-import random
 import time
-import re
-import shutil
-from datetime import datetime
+import json
+import random
+import requests
+from generate_identity import generate_identity
 
-# --- Couleurs terminal ---
-class Colors:
-    INFO = "\033[94m"
-    OK = "\033[92m"
-    WARN = "\033[93m"
-    ERR = "\033[91m"
-    RESET = "\033[0m"
+class GoogleAccountCreator:
+    def __init__(self):
+        self.session = requests.Session()
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
+        }
 
-# --- Outils ---
-def run_cmd(command, delay=0.5):
-    os.system(command)
-    time.sleep(delay)
+    def clear_cache(self):
+        """Nettoyer le cache des applications Google"""
+        try:
+            os.system("pm clear com.google.android.gms > /dev/null 2>&1")
+            os.system("pm clear com.google.android.gsf > /dev/null 2>&1")
+            time.sleep(3)
+        except:
+            pass
 
-def is_valid_email(email):
-    return re.match(r"[^@]+@[^@]+\.[^@]+", email)
+    def get_initial_params(self):
+        """Récupérer les paramètres initiaux de création de compte"""
+        url = "https://accounts.google.com/signup/v1/createaccount"
+        response = self.session.get(url, headers=self.headers)
+        # Extraire les tokens nécessaires de la réponse
+        return {
+            "flow_token": self.extract_value(response.text, "flowToken"),
+            "fid": self.extract_value(response.text, "fid")
+        }
 
-def is_strong_password(password):
-    return len(password) >= 6
+    def extract_value(self, text, key):
+        """Extraire une valeur du texte HTML"""
+        try:
+            return text.split(f'"{key}":"')[1].split('"')[0]
+        except:
+            return ""
 
-# --- Vérification fiable de termux-api ---
-def check_termux_api():
-    if shutil.which("termux-api") is None and shutil.which("termux-toast") is None:
-        print(f"{Colors.ERR}❌ termux-api non détecté.{Colors.RESET}")
-        print("Assure-toi d’avoir :")
-        print("1. Installé le package Termux-API :")
-        print("   → pkg install termux-api")
-        print("2. Installé l’application Termux:API depuis F-Droid :")
-        print("   → https://f-droid.org/packages/com.termux.api/")
-        exit()
-    else:
-        print(f"{Colors.OK}✅ Termux API détecté avec succès.{Colors.RESET}")
+    def submit_step(self, url, data):
+        """Soumettre une étape du formulaire"""
+        response = self.session.post(url, data=data, headers=self.headers)
+        return response.json()
 
-# --- Nettoyage ---
-def clear_cache():
-    print(f"{Colors.INFO}Nettoyage du cache...{Colors.RESET}")
-    run_cmd("termux-notification -t 'Nettoyage du cache en cours'")
-    run_cmd("pm clear com.google.android.gms")
-    run_cmd("pm clear com.google.android.gsf")
-    print(f"{Colors.OK}Cache nettoyé avec succès.{Colors.RESET}")
+    def create_account(self, identity):
+        """Créer un compte automatiquement"""
+        try:
+            # Initialisation
+            params = self.get_initial_params()
+            if not params["flow_token"]:
+                raise Exception("Impossible d'obtenir le token initial")
 
-# --- Données aléatoires ---
-def generate_random_details():
-    first_names = ["Alex", "Jean", "Marie", "Thomas"]
-    last_names = ["Dupont", "Martin", "Bernard", "Dubois"]
-    return {
-        'first_name': random.choice(first_names),
-        'last_name': random.choice(last_names),
-        'day': random.randint(1, 28),
-        'month': random.randint(1, 12),
-        'year': random.randint(1980, 2000)
-    }
+            # Étape 1: Informations de base
+            step1_url = "https://accounts.google.com/signup/v1/createaccount"
+            step1_data = {
+                "flowToken": params["flow_token"],
+                "fid": params["fid"],
+                "firstName": identity["first_name"],
+                "lastName": identity["last_name"],
+                "day": identity["birthdate"].split('/')[0],
+                "month": identity["birthdate"].split('/')[1],
+                "year": identity["birthdate"].split('/')[2],
+                "gender": "1",  # 1=Homme, 2=Femme, 3=Autre
+                "skipPhone": "true"
+            }
+            step1_result = self.submit_step(step1_url, step1_data)
 
-# --- Simulation pause ---
-def simulate_pause(duration=500):
-    time.sleep(duration / 1000)
+            # Étape 2: Création email/mot de passe
+            step2_url = "https://accounts.google.com/signup/v1/createaccount/email"
+            step2_data = {
+                "flowToken": step1_result.get("flowToken", params["flow_token"]),
+                "email": identity["email"],
+                "password": identity["password"],
+                "passwordConfirmation": identity["password"]
+            }
+            step2_result = self.submit_step(step2_url, step2_data)
 
-# --- Création de compte ---
-def create_account(email, password):
-    try:
-        details = generate_random_details()
+            # Étape 3: Vérification (simulée)
+            if step2_result.get("status") == "success":
+                return True
+            else:
+                raise Exception("Échec à l'étape de création")
 
-        print(f"{Colors.INFO}Veuillez ouvrir les paramètres : Paramètres > Comptes > Ajouter un compte Google{Colors.RESET}")
-        input("Appuyez sur Entrée quand vous êtes prêt...")
+        except Exception as e:
+            print(f"Erreur lors de la création: {str(e)}")
+            return False
 
-        champs = [
-            ("Prénom", details['first_name']),
-            ("Nom", details['last_name']),
-            ("Jour", str(details['day'])),
-            ("Mois", str(details['month'])),
-            ("Année", str(details['year'])),
-            ("Email", email),
-            ("Mot de passe", password),
-            ("Confirmer mot de passe", password)
-        ]
+    def run(self):
+        """Exécuter le processus complet"""
+        print("=== Création Automatique de Compte Google ===")
+        
+        # Générer une identité
+        identity = generate_identity()
+        print("\nIdentité générée:")
+        print(json.dumps(identity, indent=2))
 
-        for titre, valeur in champs:
-            run_cmd(f"termux-dialog text -t '{titre}' -i '{valeur}'", delay=0.8)
-            simulate_pause()
+        # Nettoyer le cache
+        self.clear_cache()
 
-        run_cmd("termux-toast 'Complétez manuellement les dernières étapes'")
-        print(f"{Colors.OK}Compte préparé : {email}{Colors.RESET}")
-        return True
+        # Créer le compte
+        print("\nDébut de la création automatique...")
+        if self.create_account(identity):
+            # Sauvegarder les informations
+            with open("accounts.txt", "a") as f:
+                f.write(f"{identity['email']}:{identity['password']}\n")
+            
+            print("\nCompte créé avec succès!")
+            print(f"Email: {identity['email']}")
+            print(f"Mot de passe: {identity['password']}")
+            print("Informations sauvegardées dans accounts.txt")
+        else:
+            print("\nÉchec de la création du compte")
 
-    except Exception as e:
-        print(f"{Colors.ERR}Erreur : {str(e)}{Colors.RESET}")
-        return False
-
-# --- Programme principal ---
 if __name__ == "__main__":
-    check_termux_api()
-
-    email = input("Entrez l'adresse email : ").strip()
-    password = input("Entrez le mot de passe (min. 6 caractères) : ").strip()
-
-    if not is_valid_email(email):
-        print(f"{Colors.ERR}Email invalide.{Colors.RESET}")
-        exit()
-
-    if not is_strong_password(password):
-        print(f"{Colors.ERR}Mot de passe trop court.{Colors.RESET}")
-        exit()
-
-    clear_cache()
-
-    if create_account(email, password):
-        with open("accounts.txt", "a") as f:
-            f.write(f"{datetime.now()} - {email}:{password}\n")
-        print(f"{Colors.OK}✅ Compte enregistré dans accounts.txt{Colors.RESET}")
-    else:
-        print(f"{Colors.ERR}❌ La création a échoué.{Colors.RESET}")
+    creator = GoogleAccountCreator()
+    creator.run()
