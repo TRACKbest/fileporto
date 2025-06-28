@@ -1,61 +1,65 @@
 import os
 import random
 import time
+import json
 from datetime import datetime
 
 def clear_cache():
     """Nettoyer le cache via Termux"""
+    os.system("termux-notification -t 'Nettoyage en cours'")
     os.system("pm clear com.google.android.gms")
     os.system("pm clear com.google.android.gsf")
     time.sleep(2)
 
-def generate_random_name():
+def generate_random_details():
+    """Générer des données aléatoires"""
     first_names = ["Alex", "Jean", "Marie", "Thomas"]
-    return random.choice(first_names)
+    last_names = ["Dupont", "Martin", "Bernard", "Dubois"]
+    return {
+        'first_name': random.choice(first_names),
+        'last_name': random.choice(last_names),
+        'day': random.randint(1, 28),
+        'month': random.randint(1, 12),
+        'year': random.randint(1980, 2000)
+    }
 
-def generate_random_lastname():
-    last_names = ["Dupont", "Martin", "Bernard"]
-    return random.choice(last_names)
+def simulate_swipe(duration=500):
+    """Simuler un swipe"""
+    os.system(f"termux-sensor -s accelerometer -d 100 -n 1")
+    time.sleep(duration/1000)
 
 def create_account(email, password):
     try:
-        # Ouvrir les paramètres de création de compte
-        os.system("am start -a android.settings.ADD_ACCOUNT_SETTINGS")
-        time.sleep(3)
+        details = generate_random_details()
         
-        # Ces commandes simulent les touches (ajustez selon votre appareil)
-        os.system("input keyevent 20 20 66")  # Sélectionne Google
-        time.sleep(2)
+        # Ouvrir les paramètres
+        os.system("termux-toast 'Ouvrir les paramètres manuellement'")
+        input("Ouvrez manuellement Paramètres > Comptes > Ajouter un compte Google. Appuyez sur Entrée quand c'est fait...")
         
-        # Remplissage automatique
-        first_name = generate_random_name()
-        last_name = generate_random_lastname()
+        # Remplir le formulaire
+        os.system(f"termux-dialog text -t 'Prénom' -i '{details['first_name']}'")
+        simulate_swipe()
         
-        os.system(f"input text '{first_name}'")
-        os.system("input keyevent 61")  # Tab
-        os.system(f"input text '{last_name}'")
-        os.system("input keyevent 61")  # Tab
+        os.system(f"termux-dialog text -t 'Nom' -i '{details['last_name']}'")
+        simulate_swipe()
         
-        # Date de naissance aléatoire
-        os.system("input text '01'")  # Jour
-        os.system("input keyevent 61")  # Tab
-        os.system("input text '01'")  # Mois
-        os.system("input keyevent 61")  # Tab
-        os.system("input text '1990'")  # Année
-        os.system("input keyevent 61")  # Tab
+        # Date de naissance
+        os.system(f"termux-dialog text -t 'Jour' -i '{details['day']}'")
+        simulate_swipe()
+        os.system(f"termux-dialog text -t 'Mois' -i '{details['month']}'")
+        simulate_swipe()
+        os.system(f"termux-dialog text -t 'Année' -i '{details['year']}'")
+        simulate_swipe()
         
         # Email et mot de passe
-        os.system(f"input text '{email}'")
-        os.system("input keyevent 61")  # Tab
-        os.system(f"input text '{password}'")
-        os.system("input keyevent 61")  # Tab
-        os.system(f"input text '{password}'")  # Confirmation
+        os.system(f"termux-dialog text -t 'Email' -i '{email}'")
+        simulate_swipe()
+        os.system(f"termux-dialog text -t 'Mot de passe' -i '{password}'")
+        simulate_swipe()
+        os.system(f"termux-dialog text -t 'Confirmer mot de passe' -i '{password}'")
         
         # Fin du processus
-        os.system("input keyevent 61 61 66")  # Passer la vérification
-        time.sleep(2)
-        os.system("input tap 500 1200")  # Accepter les conditions
-        
+        os.system("termux-toast 'Completez manuellement les dernières étapes'")
         print(f"Compte créé : {email}")
         return True
         
@@ -64,6 +68,12 @@ def create_account(email, password):
         return False
 
 if __name__ == "__main__":
+    # Installer les dépendances Termux-API si nécessaire
+    if not os.path.exists("/data/data/com.termux/files/usr/bin/termux-api"):
+        print("Veuillez installer Termux-API depuis le Play Store")
+        print("Puis exécutez: pkg install termux-api")
+        exit()
+
     email = input("Entrez l'email : ")
     password = input("Entrez le mot de passe : ")
     
@@ -71,4 +81,4 @@ if __name__ == "__main__":
     if create_account(email, password):
         with open("accounts.txt", "a") as f:
             f.write(f"{email}:{password}\n")
-        print("Compte enregistré !")
+        print("Compte enregistré dans accounts.txt")
