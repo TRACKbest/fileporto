@@ -2,6 +2,7 @@ import os
 import random
 import time
 import re
+import shutil
 from datetime import datetime
 
 # --- Couleurs terminal ---
@@ -23,6 +24,19 @@ def is_valid_email(email):
 def is_strong_password(password):
     return len(password) >= 6
 
+# --- Vérification fiable de termux-api ---
+def check_termux_api():
+    if shutil.which("termux-api") is None and shutil.which("termux-toast") is None:
+        print(f"{Colors.ERR}❌ termux-api non détecté.{Colors.RESET}")
+        print("Assure-toi d’avoir :")
+        print("1. Installé le package Termux-API :")
+        print("   → pkg install termux-api")
+        print("2. Installé l’application Termux:API depuis F-Droid :")
+        print("   → https://f-droid.org/packages/com.termux.api/")
+        exit()
+    else:
+        print(f"{Colors.OK}✅ Termux API détecté avec succès.{Colors.RESET}")
+
 # --- Nettoyage ---
 def clear_cache():
     print(f"{Colors.INFO}Nettoyage du cache...{Colors.RESET}")
@@ -43,7 +57,7 @@ def generate_random_details():
         'year': random.randint(1980, 2000)
     }
 
-# --- Simulation de swipe (pause) ---
+# --- Simulation pause ---
 def simulate_pause(duration=500):
     time.sleep(duration / 1000)
 
@@ -80,10 +94,7 @@ def create_account(email, password):
 
 # --- Programme principal ---
 if __name__ == "__main__":
-    if not os.path.exists("/data/data/com.termux/files/usr/bin/termux-api"):
-        print(f"{Colors.ERR}❌ Termux-API non installé.{Colors.RESET}")
-        print("Veuillez exécuter : pkg install termux-api")
-        exit()
+    check_termux_api()
 
     email = input("Entrez l'adresse email : ").strip()
     password = input("Entrez le mot de passe (min. 6 caractères) : ").strip()
